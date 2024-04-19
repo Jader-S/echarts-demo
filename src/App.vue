@@ -1,16 +1,19 @@
 <template>
   <div id="app">
-    <Board/>
+    <!-- <Board/> -->
+    <Scroll/>
   </div>
 </template>
 
 <script>
-import Board from './components/Board.vue';
+// import Board from './components/Board.vue';
+import Scroll from './components/Scroll.vue'
 
 export default {
   name: 'App',
   components: {
-    Board
+    // Board
+    Scroll
   }
 }
 </script>
