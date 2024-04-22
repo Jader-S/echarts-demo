@@ -2,7 +2,7 @@
   <div class="scroll" ref="scroll">
     <div id="view" ref="view"></div>
     <div class="btnList" ref="scrollBtn">
-      <button v-for="(item, index) in dayList" :key="index" @click="e=>change(e,item, index)">
+      <button v-for="(item, index) in dayList" :key="index" @click="change(item, index)">
         {{item}}
       </button>
     </div>
@@ -116,6 +116,7 @@ export default {
       this.myChart = echarts.init(this.$refs.view)
       this.remakeData();
       this.myChart.setOption(this.makeOption())
+      this.getStartAndEndMonthIndex(1);// 传入当前想展示的月份
     },
     makeOption() {
       const option = {
@@ -147,6 +148,7 @@ export default {
       }
       return option;
     },
+    // 将日期转化为本年度
     formatDate(date) {
       return `${moment().format('YYYY')}-${moment(date).format('MM-DD')}`;
     },
@@ -160,47 +162,57 @@ export default {
       })
       // 将data中数据按照date的月日排序
 
-
       // 遍历Data数据，根据年度分别按照[date,value]格式放入thisYearData和lastYearData中，并将所有date格式化成今年日期存入dayList中
       dataSort.forEach(item => {
         const {date,value} = item;
         const dateStr = this.formatDate(date)
+        // 根据年度分别压入更新日期后数据
         if(item.type === '本年度') {
           thisYearData.push([dateStr, value]);
         } else {
           lastYearData.push([dateStr, value]);
         }
-        
+        // 将有日期的数据压入dayList
         dayList.push(dateStr);
       })
       this.$set(this, 'lastYearData', lastYearData);
       this.$set(this, 'thisYearData', thisYearData);
       this.$set(this, 'dayList', dayList)
     },
-    change(e,item,index) {
-      const dom = e.target;
-      // 获取点击点中心的坐标
-      console.dir(dom)
-      // 对应位置
-      // 获取dom父元素的滚动值
-      // const scrollLeft = dom.parentElement.scrollLeft;
-
-      // const x = dom.offsetLeft - scrollLeft;
-      // // 获取滚动容器的宽度
-      // const scrollWidth = this.$refs.scrollBtn.offsetWidth;
-      // // 获取点击dom的x坐标在宽度中的占比
-      // const percent = x / scrollWidth;
-      // // 根据占比获取echarts展示的第一个日期和最后一个日期
-      // // const activeDay = this.dayList[index];
-      // const start = index-(Math.floor(percent * 7));
-      // const end = index-Math.floor(percent * 7) + 7;
-      // 点击日期放在中间
-      let start = index - 3 < 0 ? 0 : (index - 3);
-      let end = start + 7;
+    change(item,index) {
+      let start,end;
+      // 点击日期放在中间（数据中间）（若日期密度不确定则可能出现当前选中数据出现在非中间的其他位置）
+      start = index - 3 < 0 ? 0 : (index - 3);
+      end = start + 7;
       if(end > this.dayList.length) {
         end = this.dayList.length;
         start = end - 7;
       }
+
+      // 点击日期放在中间（月份中间）
+      // 根据全部数据获取月份，将当前月份至于中间，展示前后三个月数据（若日期密度不确定，则可能导致charts图一边密一边稀疏的情况）
+      const month = moment(item).format('MM');
+
+      // 获取当前月份的索引
+      const indexMonth = this.dayList.findIndex(item => moment(item).format('MM') === month);
+      const startMonthIndex = this.dayList.findIndex(item => parseInt(moment(item).format('MM')) === parseInt(month) - 3)
+
+      // 获取当前月份的索引
+      const startMonth = moment(this.dayList[start]).format('MM');
+      let endMonth = parseInt(startMonth) + 6;
+      if(endMonth > 12) {
+        endMonth = 12;
+      }
+      if(indexMonth !== -1) {
+        start = startMonthIndex < 0 ? 0 : startMonthIndex;
+        end = this.dayList.findIndex(item => parseInt(moment(item).format('MM')) === endMonth);
+      }
+    
+      if(endMonth >= 12) {
+        end = this.dayList.length;
+        start = this.dayList.findIndex(item => parseInt(moment(item).format('MM')) === parseInt(endMonth) - 7);
+      }
+
       // 更新echarts图表的dataZoom
       this.myChart.setOption({
         dataZoom: [{
@@ -210,10 +222,19 @@ export default {
       })
       this.addMarkLine(index)
     },
+    /**
+     * @description: 根据传入的月份获取当前月份的索引，通过change函数完成dataZoom的更新
+     * @param {*} month
+     * @return {*}
+     */
+    getStartAndEndMonthIndex(month){
+      const index = this.dayList.findIndex(item => parseInt(moment(item).format('MM')) === month);
+      const monthFormat = moment(this.dayList[index]).format('MM');
+      this.change(monthFormat, index)
+    },
     // 动态添加分割线的函数
     addMarkLine(xAxisIndex) {
       // 更新图表配置
-      console.log("addMarkLine",xAxisIndex)
       this.myChart.setOption({
           series: [{
               markLine: {
