@@ -3,7 +3,7 @@
     <div id="view" ref="view"></div>
     <div class="btnList" ref="scrollBtn">
       <button v-for="(item, index) in dayList" :key="index" @click="change(item, index)">
-        {{item}}
+        {{`${item.year}-${moment(item.date).format('MM-DD')}`}}
       </button>
     </div>
   </div>
@@ -17,8 +17,8 @@ export default {
     return {
       myChart: null,
       dayList:[],
-      thisYearData: [],
-      lastYearData: [],
+      dataByYear: [],
+      activeYear: 'all', // all/年份
       data:[{
         date: "2023-01-05",
         type: "本年度",
@@ -108,34 +108,44 @@ export default {
         type: "上一年",
         month: "7 月",
         value: 45
-      }]
+      }],
+      monthSpan: 3, // 若echarts固定展示范围，则可通过配置此项进行范围控制， 若当前选择6月，配置为3 则展示3-9  配置为2 则展示4-8
     }
   },
   methods: {
+    moment,
     init() {
       this.myChart = echarts.init(this.$refs.view)
       this.remakeData();
       this.myChart.setOption(this.makeOption())
-      this.getStartAndEndMonthIndex(1);// 传入当前想展示的月份
+      const monthOfFirstDay = parseInt(moment(this.dayList[0]).format('MM'))
+      this.getStartAndEndMonthIndex(monthOfFirstDay);// 传入当前想展示的月份
     },
     makeOption() {
+      const { dataByYear } = this;
+      // 根据dataByYear 生成series 暂时默认展示所有数据
+      const series = [];
+      for(const key in dataByYear) {
+        series.push({
+          type: 'line',
+          data: dataByYear[key],
+          name: key
+        })
+      }
+      
       const option = {
         xAxis: {
           type: 'time',
+          axisLabel: { // 可自定义x轴展示字段
+            formatter: function (value) {
+              return moment(value).format('MM-DD');
+            }
+          }
         },
         yAxis: {
           type: 'value'
         },
-        series: [{
-          data: this.thisYearData,
-          type: 'line',
-          markLine: {
-            data: [],
-          }
-        },{
-          data: this.lastYearData,
-          type: 'line'
-        }],
+        series,
         dataZoom: [{
           type: 'slider',
           show: false,
@@ -152,70 +162,92 @@ export default {
     formatDate(date) {
       return `${moment().format('YYYY')}-${moment(date).format('MM-DD')}`;
     },
+    getYear(date){
+      return moment(date).format('YYYY')
+    },
     remakeData() {
       const {data} = this;
-      const thisYearData = [];
-      const lastYearData = [];
-      const dayList = [];
       const dataSort = data.sort((a,b) => {
         return moment(this.formatDate(a.date)).valueOf()-moment(this.formatDate(b.date)).valueOf()
       })
       // 将data中数据按照date的月日排序
 
       // 遍历Data数据，根据年度分别按照[date,value]格式放入thisYearData和lastYearData中，并将所有date格式化成今年日期存入dayList中
+
+      const yearMap = new Map();
+      const dateMap = new Map();
       dataSort.forEach(item => {
         const {date,value} = item;
         const dateStr = this.formatDate(date)
+        const year = this.getYear(date)
         // 根据年度分别压入更新日期后数据
-        if(item.type === '本年度') {
-          thisYearData.push([dateStr, value]);
+        if(yearMap.has(year)){
+          const yearData = yearMap.get(year)
+          console.log('yearData',yearData)
+          yearMap.set(year,yearMap.get(year).concat([[dateStr, value]]))
+          dateMap.set(year, dateMap.get(year).concat([{date:dateStr, year}]))
         } else {
-          lastYearData.push([dateStr, value]);
+          yearMap.set(year,[[dateStr, value]])
+          dateMap.set(year,[{date:dateStr, year}])
         }
-        // 将有日期的数据压入dayList
-        dayList.push(dateStr);
       })
-      this.$set(this, 'lastYearData', lastYearData);
-      this.$set(this, 'thisYearData', thisYearData);
+      const dataByYear = Object.fromEntries(yearMap);
+      const dateByYear = Object.fromEntries(dateMap);
+      const {activeYear} = this;
+      let dayList = [];
+      // 根据选中年份，获取对应的dayList
+      if(activeYear === 'all') {
+        for(const key in dataByYear) {
+          dayList = dayList.concat(dateByYear[key])
+        }
+      } else {
+        dayList = dateByYear[activeYear]
+      }
+      dayList = dayList.sort((a,b) => {
+        return moment(a.date).valueOf()-moment(b.date).valueOf()
+      })
+      
+      this.$set(this, 'dataByYear', dataByYear)
       this.$set(this, 'dayList', dayList)
     },
     change(item,index) {
+      const {monthSpan} = this;
       let start,end;
       // 点击日期放在中间（数据中间）（若日期密度不确定则可能出现当前选中数据出现在非中间的其他位置）
-      start = index - 3 < 0 ? 0 : (index - 3);
-      end = start + 7;
+      start = index - monthSpan < 0 ? 0 : (index - monthSpan);
+      end = start + 2 * monthSpan;
       if(end > this.dayList.length) {
         end = this.dayList.length;
-        start = end - 7;
+        start = end - 2 * monthSpan;
       }
 
       // 点击日期放在中间（月份中间）
       // 根据全部数据获取月份，将当前月份至于中间，展示前后三个月数据（若日期密度不确定，则可能导致charts图一边密一边稀疏的情况）
       const month = moment(item).format('MM');
       // 获取当前月份的索引
-      const indexMonth = this.dayList.findIndex(item => moment(item).format('MM') === month);
-      let startMonthIndex = this.dayList.findIndex(item => parseInt(moment(item).format('MM')) === parseInt(month) - 3)
+      const indexMonth = this.dayList.findIndex(item => moment(item.date).format('MM') === month);
+      let startMonthIndex = this.dayList.findIndex(item => parseInt(moment(item.date).format('MM')) === parseInt(month) - 3)
       if(startMonthIndex<0) startMonthIndex = 0;
       // 获取当前月份的索引
-      const startMonth = moment(this.dayList[start]).format('MM');
-      let endMonth = parseInt(startMonth) + 6;
+      const startMonth = moment(this.dayList[start].date).format('MM');
+      let endMonth = parseInt(startMonth) + 2 * monthSpan;
       if(endMonth > 12) {
         endMonth = 12;
       }
       if(indexMonth !== -1) {
         start = startMonthIndex < 0 ? 0 : startMonthIndex;
-        end = this.dayList.findIndex(item => parseInt(moment(item).format('MM')) === endMonth);
+        end = this.dayList.findIndex(item => parseInt(moment(item.date).format('MM')) === endMonth);
       }
     
       if(endMonth >= 12) {
         end = this.dayList.length-1;
-        start = this.dayList.findIndex(item => parseInt(moment(item).format('MM')) === parseInt(endMonth) - 6);
+        start = this.dayList.findIndex(item => parseInt(moment(item.date).format('MM')) === parseInt(endMonth) - 2 * monthSpan);
       }
       // 更新echarts图表的dataZoom
       this.myChart.setOption({
         dataZoom: [{
-          startValue: this.dayList[start],
-          endValue: this.dayList[end],
+          startValue: this.dayList[start].date,
+          endValue: this.dayList[end].date,
         }]
       })
       this.addMarkLine(index)
@@ -226,8 +258,9 @@ export default {
      * @return {*}
      */
     getStartAndEndMonthIndex(month){
-      const index = this.dayList.findIndex(item => parseInt(moment(item).format('MM')) === month);
-      const monthFormat = moment(this.dayList[index]).format('MM');
+      const index = this.dayList.findIndex(item => parseInt(moment(item.date).format('MM')) === month);
+      console.log('this.dayList', this.dayList, index)
+      const monthFormat = moment(this.dayList[index].date).format('MM');
       this.change(monthFormat, index)
     },
     // 动态添加分割线的函数
@@ -236,9 +269,25 @@ export default {
       this.myChart.setOption({
           series: [{
               markLine: {
+                  symbol: 'none', // 去掉箭头
                   data: [{
-                      xAxis:  this.dayList[xAxisIndex], // 选中的 x 轴坐标索引
-                  }]
+                      xAxis:  this.dayList[xAxisIndex].date, // 选中的 x 轴坐标索引
+                  }],
+                  label: {
+                    show: true, // 分割线是否展示对应日期   
+                    position: 'start', // 标签位置  start/end
+                    formatter: function(params) {
+                      return `${moment(params.data.coord[0]).format('MM-DD')}`
+                    }
+                  },
+                  lineStyle: {
+                    // color: '#f5f5f5', // 自定义分割线颜色
+                  }
+              },
+              markPoint: {
+                data: {
+                  // valueIndex: xAxisIndex,
+                }
               }
           }]
       });
