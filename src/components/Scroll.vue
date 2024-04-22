@@ -104,7 +104,7 @@ export default {
         value: 85
       },
       {
-        date: "2022-07-09",
+        date: "2022-08-09",
         type: "上一年",
         month: "7 月",
         value: 45
@@ -139,9 +139,11 @@ export default {
         dataZoom: [{
           type: 'slider',
           show: false,
+          filterMode: 'none'
         },{
           type: 'inside',
           zoomLock: true,
+          filterMode: 'none'
         }]
       }
       return option;
@@ -207,7 +209,7 @@ export default {
     
       if(endMonth >= 12) {
         end = this.dayList.length-1;
-        start = this.dayList.findIndex(item => parseInt(moment(item).format('MM')) === parseInt(endMonth) - 7);
+        start = this.dayList.findIndex(item => parseInt(moment(item).format('MM')) === parseInt(endMonth) - 6);
       }
       // 更新echarts图表的dataZoom
       this.myChart.setOption({
