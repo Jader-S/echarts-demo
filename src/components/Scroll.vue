@@ -138,12 +138,10 @@ export default {
         }],
         dataZoom: [{
           type: 'slider',
-          startValue: this.dataZoomStart,
-          endValue: this.dataZoomEnd,
+          show: false,
         },{
           type: 'inside',
-          startValue: this.dataZoomStart,
-          endValue: this.dataZoomEnd,
+          zoomLock: true,
         }]
       }
       return option;
@@ -192,11 +190,10 @@ export default {
       // 点击日期放在中间（月份中间）
       // 根据全部数据获取月份，将当前月份至于中间，展示前后三个月数据（若日期密度不确定，则可能导致charts图一边密一边稀疏的情况）
       const month = moment(item).format('MM');
-
       // 获取当前月份的索引
       const indexMonth = this.dayList.findIndex(item => moment(item).format('MM') === month);
-      const startMonthIndex = this.dayList.findIndex(item => parseInt(moment(item).format('MM')) === parseInt(month) - 3)
-
+      let startMonthIndex = this.dayList.findIndex(item => parseInt(moment(item).format('MM')) === parseInt(month) - 3)
+      if(startMonthIndex<0) startMonthIndex = 0;
       // 获取当前月份的索引
       const startMonth = moment(this.dayList[start]).format('MM');
       let endMonth = parseInt(startMonth) + 6;
@@ -209,10 +206,9 @@ export default {
       }
     
       if(endMonth >= 12) {
-        end = this.dayList.length;
+        end = this.dayList.length-1;
         start = this.dayList.findIndex(item => parseInt(moment(item).format('MM')) === parseInt(endMonth) - 7);
       }
-
       // 更新echarts图表的dataZoom
       this.myChart.setOption({
         dataZoom: [{
