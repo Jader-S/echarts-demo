@@ -18,7 +18,7 @@ export default {
       myChart: null,
       dayList:[],
       dataByYear: [],
-      activeYear: 'all', // all/年份
+      activeYear: '2023', // all/年份
       data:[{
         date: "2023-01-05",
         type: "本年度",
@@ -108,7 +108,13 @@ export default {
         type: "上一年",
         month: "7 月",
         value: 45
-      }],
+      },
+      {
+        date: "2022-08-20",
+        type: "上一年",
+        month: "8 月",
+        value: 28
+      },],
       monthSpan: 3, // 若echarts固定展示范围，则可通过配置此项进行范围控制， 若当前选择6月，配置为3 则展示3-9  配置为2 则展示4-8
     }
   },
@@ -118,7 +124,7 @@ export default {
       this.myChart = echarts.init(this.$refs.view)
       this.remakeData();
       this.myChart.setOption(this.makeOption())
-      const monthOfFirstDay = parseInt(moment(this.dayList[0]).format('MM'))
+      const monthOfFirstDay = parseInt(moment(this.dayList[0].date).format('MM'))
       this.getStartAndEndMonthIndex(monthOfFirstDay);// 传入当前想展示的月份
     },
     makeOption() {
@@ -129,7 +135,7 @@ export default {
         series.push({
           type: 'line',
           data: dataByYear[key],
-          name: key
+          name: key,
         })
       }
       
@@ -144,6 +150,9 @@ export default {
         },
         yAxis: {
           type: 'value'
+        },
+        legend: {
+          data: Object.keys(dataByYear)
         },
         series,
         dataZoom: [{
@@ -182,8 +191,6 @@ export default {
         const year = this.getYear(date)
         // 根据年度分别压入更新日期后数据
         if(yearMap.has(year)){
-          const yearData = yearMap.get(year)
-          console.log('yearData',yearData)
           yearMap.set(year,yearMap.get(year).concat([[dateStr, value]]))
           dateMap.set(year, dateMap.get(year).concat([{date:dateStr, year}]))
         } else {
@@ -258,20 +265,29 @@ export default {
      * @return {*}
      */
     getStartAndEndMonthIndex(month){
-      const index = this.dayList.findIndex(item => parseInt(moment(item.date).format('MM')) === month);
-      console.log('this.dayList', this.dayList, index)
-      const monthFormat = moment(this.dayList[index].date).format('MM');
-      this.change(monthFormat, index)
+      const index = this.dayList.findIndex(item => {
+        return parseInt(moment(item.date).format('MM')) === month
+      });
+      this.change(this.dayList[index], index)
     },
     // 动态添加分割线的函数
     addMarkLine(xAxisIndex) {
+      const date = this.dayList[xAxisIndex].date;
+      const dataList = this.getDataInDate(date);
+      const markPointData = dataList.map(item => {
+        return {
+          xAxis:this.formatDate(item.date), 
+          yAxis:item.value,
+          value: item.value, 
+        }
+      })
       // 更新图表配置
       this.myChart.setOption({
           series: [{
               markLine: {
                   symbol: 'none', // 去掉箭头
                   data: [{
-                      xAxis:  this.dayList[xAxisIndex].date, // 选中的 x 轴坐标索引
+                      xAxis:  date, // 选中的 x 轴坐标索引
                   }],
                   label: {
                     show: true, // 分割线是否展示对应日期   
@@ -281,16 +297,20 @@ export default {
                     }
                   },
                   lineStyle: {
-                    // color: '#f5f5f5', // 自定义分割线颜色
+                    // color: '#868DD2', // 自定义分割线颜色
                   }
               },
               markPoint: {
-                data: {
-                  // valueIndex: xAxisIndex,
+                data: markPointData,
+                itemStyle: {
+                  // color: '#868DD2', // 自定义标记点颜色
                 }
               }
           }]
       });
+    },
+    getDataInDate(date){
+      return this.data.filter(item => moment(item.date).format('MM-DD') === moment(date).format('MM-DD'))
     },
   },
   mounted() {
